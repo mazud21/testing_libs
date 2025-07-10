@@ -25,7 +25,7 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   @override
   void initState() {
     super.initState();
-    Timer.periodic(Duration(seconds: 5), (Timer t) => _loadItemLocations());
+    Timer.periodic(Duration(seconds: 5), (Timer t) => _addItemLocation());
   }
 
   // Load all items from the database
@@ -77,6 +77,7 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
     debugPrint("CHECK_LOCATION: ${position.latitude}, ${position.longitude}");
 
     String a = "${position.latitude}, ${position.longitude}";
+
     return a.toString();
   }
 
