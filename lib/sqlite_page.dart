@@ -26,6 +26,7 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   double _totalKm = 0.0;
   Timer? _timer;
   DateTime? _startStopTime;
+  bool isTracking = false;
 
   @override
   void initState() {
@@ -40,7 +41,6 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
     ].request();
 
     _loadItemLocations();
-    _startLocationTimer();
   }
 
   @override
@@ -50,9 +50,28 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   }
 
   void _startLocationTimer() {
+    if (_timer != null && _timer!.isActive) return;
+
     _timer = Timer.periodic(Duration(seconds: 5), (timer) {
       _addItemLocation();
     });
+  }
+
+  void _stopLocationTimer() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  void _toggleTracking() {
+    setState(() {
+      isTracking = !isTracking;
+    });
+
+    if (isTracking) {
+      _startLocationTimer();
+    } else {
+      _stopLocationTimer();
+    }
   }
 
   Future<void> _loadItemLocations() async {
@@ -121,7 +140,16 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Location & Speed Logger')),
+      appBar: AppBar(
+        title: Text('Location & Speed Logger'),
+        actions: [
+          IconButton(
+            icon: Icon(isTracking ? Icons.stop : Icons.play_arrow),
+            tooltip: isTracking ? 'Berhenti Tracking' : 'Mulai Tracking',
+            onPressed: _toggleTracking,
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
