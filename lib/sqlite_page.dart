@@ -2,14 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import 'database_helper.dart';
-import 'edit.dart';
 
 class SqlitePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       home: ItemLocationListScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -21,100 +23,141 @@ class ItemLocationListScreen extends StatefulWidget {
 
 class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   List<Map<String, dynamic>> _itemsLocation = [];
+  double _totalKm = 0.0;
+  Timer? _timer;
+  DateTime? _startStopTime;
 
   @override
   void initState() {
     super.initState();
-    Timer.periodic(Duration(seconds: 5), (Timer t) => _addItemLocation());
+    _requestPermissions();
   }
 
-  // Load all items from the database
-  _loadItemLocations() async {
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.locationWhenInUse,
+      Permission.notification,
+    ].request();
+
+    _loadItemLocations();
+    _startLocationTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startLocationTimer() {
+    _timer = Timer.periodic(Duration(seconds: 5), (timer) {
+      _addItemLocation();
+    });
+  }
+
+  Future<void> _loadItemLocations() async {
     final items = await DatabaseHelper.instance.queryAllLocation();
+    final km = await DatabaseHelper.instance.getTotalDistanceKm();
+
     setState(() {
       _itemsLocation = items;
+      _totalKm = km;
     });
   }
 
-  // Add a new item
-  _addItemLocation() async {
-    debugPrint("getLocation: ${await getLocation()}");
-    await DatabaseHelper.instance.insertLocation({
-      'latlong': '${await getLocation()}',
-    });
-    _loadItemLocations();  // Reload items from DB
-  }
-
-  // Delete an item
-  _deleteItemLocation(int id) async {
-    await DatabaseHelper.instance.delete(id);
-    _loadItemLocations();  // Reload items from DB
-  }
-
-  // Navigate to the Edit screen
-  _editItemLocation(int id, String currentName) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => EditItemScreen(
-          itemId: id,
-          currentName: currentName,
+  Future<void> _addItemLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 10,
         ),
-      ),
-    ).then((_) {
-      // Reload the items after returning from the edit screen
+      );
+
+      final latlong = "${position.latitude}, ${position.longitude}";
+      final speedKmph = (position.speed * 3.6).toStringAsFixed(2);
+      final speed = double.tryParse(speedKmph) ?? 0.0;
+      final isMoving = speed > 0.5;
+
+      String? durasiDiam;
+      String status = isMoving ? "Bergerak" : "Diam";
+
+      if (!isMoving) {
+        _startStopTime ??= DateTime.now();
+      } else {
+        if (_startStopTime != null) {
+          final duration = DateTime.now().difference(_startStopTime!);
+          durasiDiam = _formatDuration(duration);
+          _startStopTime = null;
+        }
+      }
+
+      await DatabaseHelper.instance.insertLocation({
+        'latlong': latlong,
+        'speed': speedKmph,
+        'status': status,
+        'durasi_diam': durasiDiam,
+      });
+
       _loadItemLocations();
-    });
+    } catch (e) {
+      debugPrint("ERROR_GETTING_LOCATION: $e");
+    }
   }
 
-  getLocation() async {
-    final LocationSettings locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 100,
-    );
+  Future<void> _deleteItemLocation(int id) async {
+    await DatabaseHelper.instance.delete(id);
+    _loadItemLocations();
+  }
 
-    Position position = await Geolocator.getCurrentPosition(locationSettings: locationSettings);
-    debugPrint("CHECK_LOCATION: ${position.latitude}, ${position.longitude}");
-
-    String a = "${position.latitude}, ${position.longitude}";
-
-    return a.toString();
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String hours = twoDigits(duration.inHours);
+    String minutes = twoDigits(duration.inMinutes.remainder(60));
+    String seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$hours:$minutes:$seconds";
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('SQLite Example')),
-      body: ListView.builder(
-        itemCount: _itemsLocation.length,
-        itemBuilder: (context, index) {
-          var item = _itemsLocation[index];
-          return ListTile(
-            title: Row(
-              children: [
-                Text(item['id_location'].toString()),
-                Text(item['latlong']),
-              ],
+      appBar: AppBar(title: Text('Location & Speed Logger')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text(
+              "🧭 Total Distance: ${_totalKm.toStringAsFixed(2)} km",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.edit),
-                  onPressed: () => _editItemLocation(item['id_location'], item['latlong']),
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete),
-                  onPressed: () => _deleteItemLocation(item['id_location']),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addItemLocation,
-        child: Icon(Icons.add),
+          ),
+          Expanded(
+            child: _itemsLocation.isEmpty
+                ? Center(child: Text('No location data yet.'))
+                : ListView.builder(
+                    itemCount: _itemsLocation.length,
+                    itemBuilder: (context, index) {
+                      var item = _itemsLocation[index];
+                      return ListTile(
+                        title: Text(
+                            "${item['id_location']}.📍 ${item['latlong']}"),
+                        subtitle: Text(
+                          "🚗 Speed: ${item['speed']} km/h"
+                          "\n📏 Dist: ${(item['distance_km'] ?? 0.0).toStringAsFixed(4)} km"
+                          "\n📡 Status: ${item['status'] ?? '-'}"
+                          "\n⏱️ Diam: ${item['durasi_diam'] ?? '-'}",
+                        ),
+                        isThreeLine: true,
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete),
+                          onPressed: () =>
+                              _deleteItemLocation(item['id_location']),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
