@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // <-- Tambahkan ini
 
 import 'database_helper.dart';
 
@@ -32,6 +34,7 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
   void initState() {
     super.initState();
     _requestPermissions();
+    _loadTrackingState(); // Muat status tracking saat aplikasi dibuka
   }
 
   Future<void> _requestPermissions() async {
@@ -67,10 +70,33 @@ class _ItemLocationListScreenState extends State<ItemLocationListScreen> {
       isTracking = !isTracking;
     });
 
+    _saveTrackingState(isTracking); // Simpan status
+
     if (isTracking) {
       _startLocationTimer();
+      FlutterBackgroundService().startService();
     } else {
       _stopLocationTimer();
+      FlutterBackgroundService().invoke("stopService");
+    }
+  }
+
+  Future<void> _saveTrackingState(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isTracking', value);
+  }
+
+  Future<void> _loadTrackingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedState = prefs.getBool('isTracking') ?? false;
+
+    setState(() {
+      isTracking = savedState;
+    });
+
+    if (isTracking) {
+      _startLocationTimer();
+      FlutterBackgroundService().startService();
     }
   }
 
