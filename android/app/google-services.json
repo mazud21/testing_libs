@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "783088925292",
+    "project_id": "qreporting-25ec2",
+    "storage_bucket": "qreporting-25ec2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:783088925292:android:aadd1c0359af3548777649",
+        "android_client_info": {
+          "package_name": "com.example.testing_libs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBXSfePjTQuOdonQHP6AaOJCAjQckzjshw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
